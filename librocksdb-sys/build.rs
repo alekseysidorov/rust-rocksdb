@@ -287,6 +287,13 @@ fn build_snappy() {
     config.compile("libsnappy.a");
 }
 
+fn get_linking_mode(lib_name: &str) -> &'static str {
+    match env::var_os(&format!("{}_STATIC", lib_name)) {
+        Some(_) => "static",
+        None => "dylib",
+    }
+}
+
 fn try_to_find_and_link_lib(lib_name: &str) -> bool {
     println!("cargo:rerun-if-env-changed={}_COMPILE", lib_name);
     if let Ok(v) = env::var(&format!("{}_COMPILE", lib_name)) {
@@ -300,10 +307,7 @@ fn try_to_find_and_link_lib(lib_name: &str) -> bool {
 
     if let Ok(lib_dir) = env::var(&format!("{}_LIB_DIR", lib_name)) {
         println!("cargo:rustc-link-search=native={}", lib_dir);
-        let mode = match env::var_os(&format!("{}_STATIC", lib_name)) {
-            Some(_) => "static",
-            None => "dylib",
-        };
+        let mode = get_linking_mode(lib_name);
         println!("cargo:rustc-link-lib={}={}", mode, lib_name.to_lowercase());
         return true;
     }
@@ -378,7 +382,7 @@ fn main() {
         fail_on_empty_directory("rocksdb");
         build_rocksdb();
     } else if let Some(cpp_stdlib) = get_cpp_link_stdlib() {
-        println!("cargo:rustc-link-lib=dylib={}", cpp_stdlib);
+        println!("cargo:rustc-link-lib={}", cpp_stdlib);
     }
     if cfg!(feature = "snappy") && !try_to_find_and_link_lib("SNAPPY") {
         println!("cargo:rerun-if-changed=snappy/");
