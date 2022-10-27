@@ -340,6 +340,33 @@ fn update_submodules() {
     }
 }
 
+/// Returns the C++ standard library:
+///
+/// - if the `CXXSTDLIB` environment variable is set, uses its value.
+/// - else the corresponding default for OS is used.
+///
+/// According to https://github.com/rust-lang/cc-rs/blob/1.0.73/src/lib.rs#L2462
+fn get_cpp_link_stdlib() -> Option<String> {
+    if let Ok(stdlib) = env::var("CXXSTDLIB") {
+        if stdlib.is_empty() {
+            return None;
+        } else {
+            return Some(stdlib);
+        }
+    }
+
+    let target = env::var("TARGET").unwrap();
+    if target.contains("msvc") {
+        None
+    } else if target.contains("apple") || target.contains("freebsd") || target.contains("openbsd") {
+        Some("c++".to_string())
+    } else if target.contains("android") {
+        Some("c++_shared".to_string())
+    } else {
+        Some("stdc++".to_string())
+    }
+}
+
 fn main() {
     if !Path::new("rocksdb/AUTHORS").exists() {
         update_submodules();
@@ -350,14 +377,8 @@ fn main() {
         println!("cargo:rerun-if-changed=rocksdb/");
         fail_on_empty_directory("rocksdb");
         build_rocksdb();
-    } else {
-        let target = env::var("TARGET").unwrap();
-        // according to https://github.com/alexcrichton/cc-rs/blob/master/src/lib.rs#L2189
-        if target.contains("apple") || target.contains("freebsd") || target.contains("openbsd") {
-            println!("cargo:rustc-link-lib=dylib=c++");
-        } else if target.contains("linux") {
-            println!("cargo:rustc-link-lib=dylib=stdc++");
-        }
+    } else if let Some(cpp_stdlib) = get_cpp_link_stdlib() {
+        println!("cargo:rustc-link-lib=dylib={}", cpp_stdlib);
     }
     if cfg!(feature = "snappy") && !try_to_find_and_link_lib("SNAPPY") {
         println!("cargo:rerun-if-changed=snappy/");
